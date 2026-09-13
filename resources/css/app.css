@@ -3,6 +3,19 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+@media print {
+    body, main, section, article, table, thead, tr, td, th, div {
+        background: white !important;
+        color: black !important;
+        box-shadow: none !important;
+    }
+    header, nav, form, [data-print] { display: none !important; }
+    .overflow-x-auto { overflow: visible !important; }
+    table { min-width: 0 !important; font-size: 9pt; }
+    td, th { padding: 6pt !important; }
+    a { color: black !important; }
+}
+
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
