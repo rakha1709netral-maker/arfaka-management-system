@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class TourLeaderAccountStatusTest extends TestCase
@@ -69,50 +68,5 @@ class TourLeaderAccountStatusTest extends TestCase
             ->assertRedirectToRoute('tour-leader.index');
 
         $this->assertAuthenticatedAs($tourLeader);
-    }
-
-    public function test_super_admin_can_change_tour_leader_password(): void
-    {
-        $admin = User::factory()->superAdmin()->create();
-        $tourLeader = User::factory()->tourLeader()->create();
-
-        $this->actingAs($admin)
-            ->put(route('super-admin.tour-leaders.password.update', $tourLeader), [
-                'password' => 'new-secure-password',
-                'password_confirmation' => 'new-secure-password',
-            ])
-            ->assertRedirect();
-
-        $this->assertTrue(Hash::check('new-secure-password', $tourLeader->fresh()->password));
-
-        $this->actingAsGuest()
-            ->post(route('login.store'), [
-                'email' => $tourLeader->email,
-                'password' => 'password',
-            ])
-            ->assertSessionHasErrors('email');
-
-        $this->post(route('login.store'), [
-            'email' => $tourLeader->email,
-            'password' => 'new-secure-password',
-        ])->assertRedirectToRoute('tour-leader.index');
-
-        $this->assertAuthenticatedAs($tourLeader);
-    }
-
-    public function test_invalid_password_update_is_rejected(): void
-    {
-        $admin = User::factory()->superAdmin()->create();
-        $tourLeader = User::factory()->tourLeader()->create();
-        $originalPassword = $tourLeader->password;
-
-        $this->actingAs($admin)
-            ->put(route('super-admin.tour-leaders.password.update', $tourLeader), [
-                'password' => 'short',
-                'password_confirmation' => 'different',
-            ])
-            ->assertSessionHasErrors('password');
-
-        $this->assertSame($originalPassword, $tourLeader->fresh()->password);
     }
 }

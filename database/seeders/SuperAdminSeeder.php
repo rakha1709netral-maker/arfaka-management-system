@@ -22,6 +22,7 @@ class SuperAdminSeeder extends Seeder
             [
                 'name' => 'Administrator Arfaka',
                 'password' => Hash::make('password'),
+                'password_set_at' => now(),
                 'role' => UserRole::SuperAdmin,
                 'is_active' => true,
             ],

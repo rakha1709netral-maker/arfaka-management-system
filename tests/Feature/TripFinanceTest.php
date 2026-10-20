@@ -51,6 +51,7 @@ class TripFinanceTest extends TestCase
             'reopen' => ['DELETE', 'trips.settlement.destroy', 'trip'],
             'report' => ['GET', 'finance.index', 'none'],
             'export' => ['GET', 'finance.export', 'none'],
+            'excel export' => ['GET', 'finance.excel', 'none'],
         ];
     }
 
@@ -264,6 +265,22 @@ class TripFinanceTest extends TestCase
         (new TripFinance)->audit($trip, $admin, 'entry.rejected', ['entry_id' => 99, 'amount' => 100000], 'Contoh audit');
         $this->actingAs($admin)->get(route('super-admin.trips.finance.show', $trip))
             ->assertSee('Pengeluaran ditolak')->assertSee('Transaksi #99')->assertDontSee('entry_id');
+    }
+
+    public function test_transaction_status_filter_shows_clear_counts_and_only_matching_entries(): void
+    {
+        $trip = Trip::factory()->create();
+        foreach (['pending' => 'Menunggu nota', 'approved' => 'Nota valid unik', 'rejected' => 'Nota ditolak', 'void' => 'Biaya dibatalkan'] as $status => $description) {
+            FinanceEntry::factory()->for($trip)->create(['status' => $status, 'description' => $description]);
+        }
+        $this->actingAs(User::factory()->superAdmin()->create());
+
+        $this->get(route('super-admin.trips.finance.show', ['trip' => $trip, 'entry_status' => 'rejected']))
+            ->assertOk()->assertSee('Nota ditolak')->assertSee('Tidak masuk perhitungan keuangan trip.')
+            ->assertDontSee('Menunggu nota')->assertDontSee('Nota valid unik')->assertDontSee('Biaya dibatalkan')
+            ->assertViewHas('entryStatusCounts', fn ($counts): bool => (int) $counts['rejected'] === 1 && $counts->sum() === 4);
+        $this->get(route('super-admin.trips.finance.show', ['trip' => $trip, 'entry_status' => 'invalid']))
+            ->assertSessionHasErrors('entry_status');
     }
 
     public function test_inactive_existing_session_cannot_submit_expenses(): void

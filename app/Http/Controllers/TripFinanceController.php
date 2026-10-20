@@ -11,6 +11,7 @@ use App\UserRole;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -23,8 +24,15 @@ class TripFinanceController extends Controller
         $leaderId = $isAdmin ? null : $request->user()->id;
         $summary = $finance->summary($trip, $leaderId);
         $trip->load('customer');
-        $entries = $trip->financeEntries()->with(['creator:id,name', 'leader:id,name', 'reviewer:id,name'])
-            ->when(! $isAdmin, fn ($query) => $query->where('leader_id', $leaderId))
+        $entryStatus = $request->validate([
+            'entry_status' => ['nullable', Rule::in(['pending', 'approved', 'rejected', 'void'])],
+        ])['entry_status'] ?? null;
+        $entryQuery = $trip->financeEntries()
+            ->when(! $isAdmin, fn ($query) => $query->where('leader_id', $leaderId));
+        $entryStatusCounts = (clone $entryQuery)->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')->pluck('total', 'status');
+        $entries = $entryQuery->with(['creator:id,name', 'leader:id,name', 'reviewer:id,name'])
+            ->when($entryStatus, fn ($query) => $query->where('status', $entryStatus))
             ->orderByDesc('occurred_on')->orderByDesc('id')->paginate(15)->withQueryString();
         $leaders = $isAdmin ? User::query()->where('role', UserRole::TourLeader)
             ->where(function ($query) use ($trip): void {
@@ -37,6 +45,7 @@ class TripFinanceController extends Controller
         return view('finance.trip', [
             'trip' => $trip, 'summary' => $summary, 'entries' => $entries, 'leaders' => $leaders,
             'budgets' => $budgets, 'audits' => $audits, 'isAdmin' => $isAdmin,
+            'entryStatus' => $entryStatus, 'entryStatusCounts' => $entryStatusCounts,
             'categories' => ExpenseCategory::cases(), 'types' => $isAdmin ? FinanceType::cases() : [FinanceType::Expense],
         ]);
     }

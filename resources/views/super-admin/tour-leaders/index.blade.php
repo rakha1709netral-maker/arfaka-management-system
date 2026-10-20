@@ -22,8 +22,8 @@
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-3">
                             <h2 class="truncate text-lg font-semibold">{{ $tourLeader->name }}</h2>
-                            <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $tourLeader->is_active ? 'bg-emerald-400/15 text-emerald-300' : 'bg-slate-400/15 text-slate-300' }}">
-                                {{ $tourLeader->is_active ? 'Active' : 'Inactive' }}
+                            <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ ! $tourLeader->is_active ? 'bg-slate-400/15 text-slate-300' : ($tourLeader->password_set_at === null ? 'bg-amber-400/15 text-amber-300' : 'bg-emerald-400/15 text-emerald-300') }}">
+                                {{ ! $tourLeader->is_active ? 'Nonaktif' : ($tourLeader->password_set_at === null ? 'Menunggu Aktivasi Akun' : 'Aktif') }}
                             </span>
                         </div>
                         <dl class="mt-3 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
@@ -57,18 +57,24 @@
                         </a>
 
                         @if ($tourLeader->is_active)
+                            <form method="POST" action="{{ $tourLeader->password_set_at === null ? route('super-admin.tour-leaders.invitation.store', $tourLeader) : route('super-admin.tour-leaders.password-reset.store', $tourLeader) }}">
+                                @csrf
+                                <button type="submit" class="w-full rounded-xl border border-sky-400/40 px-4 py-2.5 text-sm font-semibold text-sky-300 transition hover:bg-sky-400 hover:text-slate-950 sm:w-auto">
+                                    {{ $tourLeader->password_set_at === null ? 'Kirim Ulang Undangan' : 'Kirim Link Reset Password' }}
+                                </button>
+                            </form>
                             <form method="POST" action="{{ route('super-admin.tour-leaders.activation.destroy', $tourLeader) }}" onsubmit="return confirm('Yakin ingin menonaktifkan akun Tour Leader ini?')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="w-full rounded-xl border border-amber-400/40 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-400 hover:text-slate-950 sm:w-auto">
-                                    Deactivate
+                                    Nonaktifkan
                                 </button>
                             </form>
                         @else
                             <form method="POST" action="{{ route('super-admin.tour-leaders.activation.store', $tourLeader) }}">
                                 @csrf
                                 <button type="submit" class="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 sm:w-auto">
-                                    Activate
+                                    Aktifkan
                                 </button>
                             </form>
                         @endif

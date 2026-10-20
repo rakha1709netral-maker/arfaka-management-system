@@ -6,11 +6,15 @@ use App\Http\Controllers\BudgetItemController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\FinanceEntryController;
 use App\Http\Controllers\FinanceReportController;
+use App\Http\Controllers\MyPasswordController;
+use App\Http\Controllers\NewPasswordController;
+use App\Http\Controllers\PasswordResetLinkController;
 use App\Http\Controllers\SettlementController;
 use App\Http\Controllers\SuperAdminDashboardController;
+use App\Http\Controllers\TourLeaderAccountLinkController;
 use App\Http\Controllers\TourLeaderActivationController;
 use App\Http\Controllers\TourLeaderController;
-use App\Http\Controllers\TourLeaderPasswordController;
+use App\Http\Controllers\TourLeaderInvitationController;
 use App\Http\Controllers\TripAssignmentResponseController;
 use App\Http\Controllers\TripController;
 use App\Http\Controllers\TripFinanceController;
@@ -31,12 +35,25 @@ Route::get('/', fn (Request $request): RedirectResponse => redirect()->route(
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
+    Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:5,1')->name('password.email');
+    Route::get('/reset-password/{token}', [NewPasswordController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [NewPasswordController::class, 'update'])
+        ->middleware('throttle:5,1')->name('password.update');
+    Route::get('/invitation/{token}', [TourLeaderInvitationController::class, 'edit'])->name('invitation.edit');
+    Route::post('/invitation', [TourLeaderInvitationController::class, 'update'])
+        ->middleware('throttle:5,1')->name('invitation.update');
 });
 
 Route::middleware(['auth', 'active'])->group(function (): void {
     Route::get('/home', fn (Request $request): RedirectResponse => redirect()->route(
         $request->user()->role->homeRouteName(),
     ))->name('home');
+
+    Route::get('/my-password', [MyPasswordController::class, 'edit'])->name('my-password.edit');
+    Route::put('/my-password', [MyPasswordController::class, 'update'])
+        ->middleware('throttle:5,1')->name('my-password.update');
 
     Route::prefix('super-admin')
         ->name('super-admin.')
@@ -46,6 +63,7 @@ Route::middleware(['auth', 'active'])->group(function (): void {
 
             Route::get('finance', [FinanceReportController::class, 'index'])->name('finance.index');
             Route::get('finance/export', [FinanceReportController::class, 'export'])->name('finance.export');
+            Route::get('finance/excel', [FinanceReportController::class, 'exportExcel'])->name('finance.excel');
             Route::get('trips/{trip}/finance', [TripFinanceController::class, 'show'])->name('trips.finance.show');
             Route::put('trips/{trip}/finance', [TripFinanceController::class, 'update'])->name('trips.finance.update');
             Route::post('trips/{trip}/entries', [FinanceEntryController::class, 'store'])->name('trips.entries.store');
@@ -67,8 +85,10 @@ Route::middleware(['auth', 'active'])->group(function (): void {
                 ->name('tour-leaders.activation.store');
             Route::delete('tour-leaders/{tourLeader}/activation', [TourLeaderActivationController::class, 'destroy'])
                 ->name('tour-leaders.activation.destroy');
-            Route::put('tour-leaders/{tourLeader}/password', [TourLeaderPasswordController::class, 'update'])
-                ->name('tour-leaders.password.update');
+            Route::post('tour-leaders/{tourLeader}/invitation', [TourLeaderAccountLinkController::class, 'invite'])
+                ->middleware('throttle:3,1')->name('tour-leaders.invitation.store');
+            Route::post('tour-leaders/{tourLeader}/password-reset', [TourLeaderAccountLinkController::class, 'reset'])
+                ->middleware('throttle:3,1')->name('tour-leaders.password-reset.store');
         });
 
     Route::get('/tour-leader', [AssignedTripController::class, 'index'])

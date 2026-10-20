@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\FinanceWorkbook;
 use App\Models\BudgetItem;
 use App\Models\Trip;
 use App\TripStatus;
@@ -11,6 +12,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use stdClass;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FinanceReportController extends Controller
@@ -18,14 +20,22 @@ class FinanceReportController extends Controller
     public function index(Request $request): View
     {
         $query = $this->query($request);
-        $totals = DB::query()->fromSub((clone $query)->toBase(), 'report')
-            ->selectRaw('COUNT(*) as trips, SUM(contract_amount) as contracts, SUM(payment_total) as payments, SUM(expense_total) as expenses')
-            ->selectRaw('SUM(CASE WHEN contract_amount IS NOT NULL THEN contract_amount - COALESCE(payment_total, 0) ELSE 0 END) as receivables')
-            ->selectRaw('SUM(CASE WHEN contract_amount IS NOT NULL THEN contract_amount - COALESCE(expense_total, 0) ELSE 0 END) as profit')
-            ->selectRaw('SUM(CASE WHEN contract_amount IS NULL THEN 1 ELSE 0 END) as missing_contracts')
-            ->selectRaw('SUM(pending_count) as pending_count')
-            ->selectRaw('SUM(COALESCE(payment_total, 0) - COALESCE(company_expenses, 0) - COALESCE(advance_total, 0) - COALESCE(reimbursement_total, 0) + COALESCE(return_total, 0)) as cash')
-            ->first();
+        $totals = $this->totals($query);
+        if ($request->boolean('print')) {
+            $trips = $query->with([
+                'customer:id,name',
+                'financeEntries' => fn ($entries) => $entries
+                    ->with(['creator:id,name', 'leader:id,name', 'reviewer:id,name'])
+                    ->orderBy('occurred_on')->orderBy('id'),
+            ])->orderByDesc('start_date')->orderByDesc('id')->get();
+
+            return view('finance.report-print', [
+                'trips' => $trips,
+                'totals' => $totals,
+                'generatedAt' => now(),
+                'filters' => $request->only(['search', 'from', 'to', 'status']),
+            ]);
+        }
         $chartTrips = (clone $query)->get(['trips.id', 'trips.start_date', 'trips.status']);
         $statusChart = collect(TripStatus::cases())->map(function (TripStatus $status) use ($chartTrips): array {
             return [
@@ -112,6 +122,32 @@ class FinanceReportController extends Controller
             }
             fclose($stream);
         }, 'rekap-keuangan-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'private, no-store']);
+    }
+
+    public function exportExcel(Request $request, FinanceWorkbook $workbook): StreamedResponse
+    {
+        $query = $this->query($request)->orderByDesc('start_date')->orderByDesc('id');
+        $totals = $this->totals($query);
+        $filters = $request->only(['search', 'from', 'to', 'status']);
+
+        return response()->streamDownload(
+            fn () => $workbook->write($query, $totals, $filters),
+            'rekap-keuangan-arfaka-'.now()->format('Y-m-d-His').'.xlsx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'],
+        );
+    }
+
+    /** @param Builder<Trip> $query */
+    private function totals(Builder $query): stdClass
+    {
+        return DB::query()->fromSub((clone $query)->toBase(), 'report')
+            ->selectRaw('COUNT(*) as trips, SUM(contract_amount) as contracts, SUM(payment_total) as payments, SUM(expense_total) as expenses')
+            ->selectRaw('SUM(CASE WHEN contract_amount IS NOT NULL THEN contract_amount - COALESCE(payment_total, 0) ELSE 0 END) as receivables')
+            ->selectRaw('SUM(CASE WHEN contract_amount IS NOT NULL THEN contract_amount - COALESCE(expense_total, 0) ELSE 0 END) as profit')
+            ->selectRaw('SUM(CASE WHEN contract_amount IS NULL THEN 1 ELSE 0 END) as missing_contracts')
+            ->selectRaw('SUM(pending_count) as pending_count')
+            ->selectRaw('SUM(COALESCE(payment_total, 0) - COALESCE(company_expenses, 0) - COALESCE(advance_total, 0) - COALESCE(reimbursement_total, 0) + COALESCE(return_total, 0)) as cash')
+            ->first();
     }
 
     /** @return Builder<Trip> */

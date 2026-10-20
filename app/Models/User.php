@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\ArfakaPasswordResetNotification;
 use App\TripAssignmentStatus;
 use App\UserRole;
 use Database\Factories\UserFactory;
@@ -13,12 +14,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active'])]
+#[Fillable(['name', 'email', 'password', 'password_set_at', 'role', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    public function sendPasswordResetNotification(mixed $token): void
+    {
+        $this->notify(new ArfakaPasswordResetNotification((string) $token));
+    }
 
     /** @return HasMany<TripAssignment, $this> */
     public function tripAssignments(): HasMany
@@ -45,6 +51,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'password_set_at' => 'datetime',
             'role' => UserRole::class,
             'is_active' => 'boolean',
         ];

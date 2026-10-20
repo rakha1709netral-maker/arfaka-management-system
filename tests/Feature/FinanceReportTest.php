@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\BudgetItem;
 use App\Models\Customer;
 use App\Models\FinanceEntry;
 use App\Models\Trip;
 use App\Models\User;
+use DOMDocument;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use PharData;
 use Tests\TestCase;
 
 class FinanceReportTest extends TestCase
@@ -141,5 +144,126 @@ class FinanceReportTest extends TestCase
         $this->assertStringContainsString('Rp 125.000', $csv);
         $this->assertStringContainsString('Bukti tidak lengkap', $csv);
         $this->assertStringContainsString('GPS -6.2000000, 106.8166667', $csv);
+    }
+
+    public function test_excel_export_downloads_a_real_xlsx_with_summary_and_transaction_sheets(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 2)->setTime(9, 30));
+        $admin = User::factory()->superAdmin()->create();
+        $trip = Trip::factory()->create(['name' => '=1+1', 'contract_amount' => 900000]);
+        FinanceEntry::factory()->for($trip)->create([
+            'created_by' => $admin->id,
+            'status' => 'rejected',
+            'amount' => 125000,
+            'reviewed_by' => $admin->id,
+            'reviewed_at' => '2026-09-02 10:30:00',
+            'review_reason' => 'Bukti tidak lengkap',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('super-admin.finance.excel'));
+        $binary = $response->assertDownload('rekap-keuangan-arfaka-2026-10-02-093000.xlsx')->streamedContent();
+        $parts = $this->xlsxParts($binary);
+        $workbook = new DOMDocument;
+
+        $this->assertSame('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('attachment;', $response->headers->get('Content-Disposition'));
+        $this->assertSame('PK', substr($binary, 0, 2));
+        $this->assertTrue($workbook->loadXML($parts['xl/workbook.xml']));
+        $this->assertSame(['Ringkasan Keuangan', 'Detail Transaksi'], array_map(
+            fn ($sheet): string => $sheet->getAttribute('name'),
+            iterator_to_array($workbook->getElementsByTagName('sheet')),
+        ));
+        $this->assertStringContainsString('formatCode="&quot;Rp&quot; #,##0', $parts['xl/styles.xml']);
+        $this->assertStringContainsString('<v>900000</v>', $parts['xl/worksheets/sheet1.xml']);
+        $this->assertStringContainsString('t="inlineStr"', $parts['xl/worksheets/sheet1.xml']);
+        $this->assertStringContainsString('=1+1', $parts['xl/worksheets/sheet1.xml']);
+        $this->assertStringNotContainsString('Pencarian</t>', $parts['xl/worksheets/sheet1.xml']);
+        $this->assertStringContainsString('Bukti tidak lengkap', $parts['xl/worksheets/sheet2.xml']);
+        $this->assertStringContainsString('<autoFilter', $parts['xl/worksheets/sheet1.xml']);
+        $this->assertStringContainsString('state="frozen"', $parts['xl/worksheets/sheet2.xml']);
+    }
+
+    public function test_excel_export_applies_search_date_and_status_filters_and_keeps_finance_totals(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $selected = Trip::factory()->create(['name' => 'Papua Utama', 'status' => 'closed', 'start_date' => '2026-09-10', 'end_date' => '2026-09-12', 'contract_amount' => 1000000]);
+        Trip::factory()->create(['name' => 'Bandung Lain', 'status' => 'closed', 'start_date' => '2026-09-10', 'contract_amount' => 7000000]);
+        Trip::factory()->create(['name' => 'Papua Terlalu Awal', 'status' => 'closed', 'start_date' => '2026-08-10', 'contract_amount' => 8000000]);
+        Trip::factory()->create(['name' => 'Papua Terlalu Akhir', 'status' => 'closed', 'start_date' => '2026-10-10', 'contract_amount' => 8500000]);
+        Trip::factory()->create(['name' => 'Papua Masih Draft', 'status' => 'draft', 'start_date' => '2026-09-10', 'contract_amount' => 9000000]);
+        FinanceEntry::factory()->for($selected)->create(['type' => 'payment', 'status' => 'approved', 'amount' => 500000]);
+        FinanceEntry::factory()->for($selected)->create(['type' => 'expense', 'status' => 'approved', 'amount' => 100000]);
+        FinanceEntry::factory()->for($selected)->create(['type' => 'expense', 'status' => 'rejected', 'amount' => 999999]);
+        BudgetItem::factory()->for($selected)->create(['quantity' => 2, 'unit_amount' => 25000]);
+        $filters = ['search' => 'Papua', 'from' => '2026-09-01', 'to' => '2026-09-30', 'status' => 'closed'];
+        $this->actingAs($admin);
+
+        $dashboard = $this->get(route('super-admin.finance.index', $filters));
+        $response = $this->get(route('super-admin.finance.excel', $filters));
+        $parts = $this->xlsxParts($response->assertDownload()->streamedContent());
+        $summary = $parts['xl/worksheets/sheet1.xml'];
+        $details = $parts['xl/worksheets/sheet2.xml'];
+
+        $dashboard->assertSee(route('super-admin.finance.excel', $filters))
+            ->assertViewHas('totals', fn ($totals): bool => (int) $totals->contracts === 1000000
+            && (int) $totals->payments === 500000 && (int) $totals->expenses === 100000
+            && (int) $totals->receivables === 500000 && (int) $totals->profit === 900000);
+        $this->assertStringContainsString($selected->code, $summary);
+        $this->assertSame(1, substr_count($summary, $selected->code));
+        $this->assertStringContainsString('Papua Utama', $summary);
+        $this->assertStringContainsString('Periode mulai trip', $summary);
+        $this->assertStringContainsString('Status trip', $summary);
+        $this->assertStringContainsString('Pencarian', $summary);
+        $this->assertStringNotContainsString('Bandung Lain', $summary);
+        $this->assertStringNotContainsString('Papua Terlalu Awal', $summary);
+        $this->assertStringNotContainsString('Papua Terlalu Akhir', $summary);
+        $this->assertStringNotContainsString('Papua Masih Draft', $summary);
+        $this->assertStringContainsString('<v>1000000</v>', $summary);
+        $this->assertStringContainsString('<v>500000</v>', $summary);
+        $this->assertStringContainsString('<v>100000</v>', $summary);
+        $this->assertStringContainsString('<v>50000</v>', $summary);
+        $this->assertStringContainsString('<v>900000</v>', $summary);
+        $this->assertSame(3, substr_count($details, $selected->code));
+        $this->assertStringContainsString('Ditolak', $details);
+    }
+
+    /** @return array<string, string> */
+    private function xlsxParts(string $binary): array
+    {
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'arfaka-xlsx-');
+        $zipPath = $temporaryPath.'.zip';
+        rename($temporaryPath, $zipPath);
+        file_put_contents($zipPath, $binary);
+        try {
+            $archive = new PharData($zipPath);
+            $parts = [];
+            foreach (['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'] as $path) {
+                $parts[$path] = $archive[$path]->getContent();
+                $this->assertTrue((new DOMDocument)->loadXML($parts[$path]));
+            }
+
+            return $parts;
+        } finally {
+            unset($archive);
+            unlink($zipPath);
+        }
+    }
+
+    public function test_print_report_includes_all_filtered_trips_and_transaction_details(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $trips = Trip::factory()->count(16)->create(['status' => 'confirmed', 'start_date' => '2026-09-01']);
+        Trip::factory()->create(['name' => 'Outside filter', 'status' => 'draft']);
+        FinanceEntry::factory()->for($trips->first())->create([
+            'created_by' => $admin->id, 'status' => 'rejected', 'review_reason' => 'Bukti kurang jelas',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('super-admin.finance.index', ['print' => 1, 'status' => 'confirmed']));
+
+        $response->assertOk()->assertSee('arfaka-logo.png')->assertSee('Bukti kurang jelas')
+            ->assertSee('Ringkasan per trip')->assertSee('Rincian transaksi')->assertDontSee('Outside filter');
+        foreach ($trips as $trip) {
+            $response->assertSee($trip->code);
+        }
     }
 }

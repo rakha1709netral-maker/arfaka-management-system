@@ -8,8 +8,8 @@
             <a href="{{ route('super-admin.tour-leaders.index') }}" class="text-sm font-medium text-emerald-400 hover:text-emerald-300">&larr; Kembali ke Tour Leaders</a>
             <div class="flex flex-wrap items-center gap-3">
                 <h1 class="text-3xl font-semibold tracking-tight">Edit {{ $tourLeader->name }}</h1>
-                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $tourLeader->is_active ? 'bg-emerald-400/15 text-emerald-300' : 'bg-slate-400/15 text-slate-300' }}">
-                    {{ $tourLeader->is_active ? 'Active' : 'Inactive' }}
+                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ ! $tourLeader->is_active ? 'bg-slate-400/15 text-slate-300' : ($tourLeader->password_set_at === null ? 'bg-amber-400/15 text-amber-300' : 'bg-emerald-400/15 text-emerald-300') }}">
+                    {{ ! $tourLeader->is_active ? 'Nonaktif' : ($tourLeader->password_set_at === null ? 'Menunggu Aktivasi Akun' : 'Aktif') }}
                 </span>
             </div>
         </div>
@@ -44,30 +44,19 @@
             </form>
 
             <div class="flex min-w-0 flex-col gap-6">
-                <form method="POST" action="{{ route('super-admin.tour-leaders.password.update', $tourLeader) }}" class="flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7">
-                    @csrf
-                    @method('PUT')
+                <section class="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7">
+                    <h2 class="text-xl font-semibold">Akses Password</h2>
+                    <p class="mt-1 text-sm text-slate-400">Password hanya dibuat atau diubah oleh pemilik akun melalui tautan email.</p>
 
-                    <div>
-                        <h2 class="text-xl font-semibold">Ganti Password</h2>
-                        <p class="mt-1 text-sm text-slate-400">Password lama tidak pernah ditampilkan.</p>
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label for="password" class="text-sm font-medium">Password Baru</label>
-                        <input id="password" name="password" type="password" required autocomplete="new-password" class="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10">
-                        @error('password')
-                            <p class="text-sm text-red-400" role="alert">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="flex flex-col gap-2">
-                        <label for="password_confirmation" class="text-sm font-medium">Konfirmasi Password Baru</label>
-                        <input id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" class="w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10">
-                    </div>
-
-                    <button type="submit" class="rounded-xl border border-white/20 px-5 py-3 text-sm font-semibold transition hover:bg-white hover:text-slate-950">Perbarui Password</button>
-                </form>
+                    @if ($tourLeader->is_active)
+                        <form method="POST" action="{{ $tourLeader->password_set_at === null ? route('super-admin.tour-leaders.invitation.store', $tourLeader) : route('super-admin.tour-leaders.password-reset.store', $tourLeader) }}" class="mt-5">
+                            @csrf
+                            <button type="submit" class="w-full rounded-xl border border-sky-400/40 px-5 py-3 text-sm font-semibold text-sky-300 transition hover:bg-sky-400 hover:text-slate-950">
+                                {{ $tourLeader->password_set_at === null ? 'Kirim Ulang Undangan' : 'Kirim Link Reset Password' }}
+                            </button>
+                        </form>
+                    @endif
+                </section>
 
                 <section class="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7">
                     <h2 class="text-xl font-semibold">Status Akun</h2>

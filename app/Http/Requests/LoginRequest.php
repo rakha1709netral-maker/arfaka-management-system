@@ -48,7 +48,7 @@ class LoginRequest extends FormRequest
             function (User $user) use (&$isInactive): bool {
                 $isInactive = ! $user->is_active;
 
-                return $user->is_active;
+                return $user->is_active && $user->password_set_at !== null;
             },
         )) {
             RateLimiter::hit($this->throttleKey());

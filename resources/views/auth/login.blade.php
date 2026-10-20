@@ -6,10 +6,17 @@
     <main class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-6">
         <section class="w-full max-w-md rounded-3xl border border-white/10 bg-white p-6 text-slate-900 shadow-2xl shadow-black/30 sm:p-9">
             <div class="flex flex-col gap-2 text-center">
+                <div class="mx-auto mb-2 flex h-28 w-full max-w-56 items-center justify-center p-2">
+                    <img src="{{ asset('images/arfaka-logo.png') }}" alt="Logo Arfaka Tour and Travel" class="h-full w-full object-contain">
+                </div>
                 <p class="text-xs font-semibold tracking-[0.28em] text-emerald-700">INTERNAL SYSTEM</p>
                 <h1 class="text-3xl font-semibold tracking-tight">ARFAKA TOUR</h1>
                 <p class="text-sm text-slate-500">Masuk menggunakan akun internal Anda.</p>
             </div>
+
+            @if (session('status'))
+                <p class="mt-6 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{{ session('status') }}</p>
+            @endif
 
             <form method="POST" action="{{ route('login.store') }}" class="mt-8 flex flex-col gap-5">
                 @csrf
@@ -29,6 +36,8 @@
                         <p class="text-sm text-red-600" role="alert">{{ $message }}</p>
                     @enderror
                 </div>
+
+                <a href="{{ route('password.request') }}" class="self-end text-sm font-medium text-emerald-700 hover:underline">Lupa password?</a>
 
                 <button type="submit" class="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
                     Login

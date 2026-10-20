@@ -4,9 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\TripAssignment;
 use App\Models\User;
+use App\Notifications\TourLeaderInvitationNotification;
 use App\UserRole;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -50,8 +51,6 @@ class TourLeaderManagementTest extends TestCase
             'store' => ['POST', 'super-admin.tour-leaders.store', false, [
                 'name' => 'Blocked User',
                 'email' => 'blocked@arfaka.test',
-                'password' => 'password',
-                'password_confirmation' => 'password',
             ]],
             'edit form' => ['GET', 'super-admin.tour-leaders.edit', true, []],
             'update' => ['PUT', 'super-admin.tour-leaders.update', true, [
@@ -60,10 +59,8 @@ class TourLeaderManagementTest extends TestCase
             ]],
             'activate' => ['POST', 'super-admin.tour-leaders.activation.store', true, []],
             'deactivate' => ['DELETE', 'super-admin.tour-leaders.activation.destroy', true, []],
-            'password' => ['PUT', 'super-admin.tour-leaders.password.update', true, [
-                'password' => 'new-password',
-                'password_confirmation' => 'new-password',
-            ]],
+            'invitation' => ['POST', 'super-admin.tour-leaders.invitation.store', true, []],
+            'password reset' => ['POST', 'super-admin.tour-leaders.password-reset.store', true, []],
         ];
     }
 
@@ -117,12 +114,11 @@ class TourLeaderManagementTest extends TestCase
     public function test_super_admin_can_create_an_active_tour_leader(): void
     {
         $admin = User::factory()->superAdmin()->create();
+        Notification::fake();
 
         $response = $this->actingAs($admin)->post(route('super-admin.tour-leaders.store'), [
             'name' => 'Nadia Guide',
             'email' => 'nadia@arfaka.test',
-            'password' => 'secure-password',
-            'password_confirmation' => 'secure-password',
             'role' => UserRole::SuperAdmin->value,
             'is_active' => false,
         ]);
@@ -134,7 +130,9 @@ class TourLeaderManagementTest extends TestCase
         $this->assertSame('Nadia Guide', $tourLeader->name);
         $this->assertSame(UserRole::TourLeader, $tourLeader->role);
         $this->assertTrue($tourLeader->is_active);
-        $this->assertTrue(Hash::check('secure-password', $tourLeader->password));
+        $this->assertNull($tourLeader->password);
+        $this->assertNull($tourLeader->password_set_at);
+        Notification::assertSentTo($tourLeader, TourLeaderInvitationNotification::class);
     }
 
     public function test_duplicate_email_is_rejected_when_creating_tour_leader(): void
@@ -145,8 +143,6 @@ class TourLeaderManagementTest extends TestCase
         $response = $this->actingAs($admin)->post(route('super-admin.tour-leaders.store'), [
             'name' => 'Duplicate Email',
             'email' => $existing->email,
-            'password' => 'secure-password',
-            'password_confirmation' => 'secure-password',
         ]);
 
         $response->assertSessionHasErrors('email');
@@ -160,11 +156,9 @@ class TourLeaderManagementTest extends TestCase
         $response = $this->actingAs($admin)->post(route('super-admin.tour-leaders.store'), [
             'name' => '',
             'email' => 'not-an-email',
-            'password' => 'short',
-            'password_confirmation' => 'different',
         ]);
 
-        $response->assertSessionHasErrors(['name', 'email', 'password']);
+        $response->assertSessionHasErrors(['name', 'email']);
         $this->assertSame(1, User::query()->count());
     }
 

@@ -2,13 +2,18 @@
 @section('title', 'Keuangan Trip | ARFAKA TOUR')
 @section('main')
 <div class="flex flex-col gap-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/70 p-5 sm:p-7">
         <div>
             <a class="text-sm text-emerald-400" href="{{ route($isAdmin ? 'super-admin.trips.show' : 'tour-leader.trips.show', $trip) }}">&larr; Detail trip</a>
-            <h1 class="mt-3 break-words text-3xl font-semibold">{{ $trip->name }}</h1>
-            <p class="mt-2 break-all text-xs text-slate-400">{{ $trip->code }} · {{ $trip->customer->name }}</p>
+            <p class="mt-4 text-xs font-semibold uppercase tracking-widest text-sky-300">Keuangan trip</p>
+            <h1 class="mt-2 break-words text-3xl font-semibold">{{ $trip->name }}</h1>
+            <p class="mt-2 break-words text-sm text-slate-400">{{ $trip->code }} · {{ $trip->customer->name }}</p>
+            <p class="mt-2 text-xs text-slate-500">{{ $trip->start_date->format('d M Y') }} – {{ $trip->end_date->format('d M Y') }} · {{ $trip->destination }}</p>
         </div>
-        <span class="rounded-full border border-white/20 px-4 py-2 text-sm">{{ $trip->finances_locked_at ? 'Settlement selesai · Terkunci' : 'Pencatatan terbuka' }}</span>
+        <div class="flex flex-col items-start gap-2 sm:items-end">
+            <span class="rounded-full border {{ $trip->finances_locked_at ? 'border-amber-400/40 bg-amber-400/10 text-amber-100' : 'border-emerald-400/40 bg-emerald-400/10 text-emerald-100' }} px-4 py-2 text-sm font-medium">{{ $trip->finances_locked_at ? 'Settlement selesai · Terkunci' : 'Pencatatan terbuka' }}</span>
+            <span class="text-xs text-slate-400">Status perjalanan: {{ $trip->status->label() }}</span>
+        </div>
     </div>
     @if ($errors->any())
         <div role="alert" class="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200"><p class="font-semibold">Periksa kembali isian:</p><ul class="mt-2 list-inside list-disc">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
@@ -47,7 +52,10 @@
     @endif
 
     <section id="transactions" class="flex flex-col gap-4">
-        <h2 class="text-xl font-semibold">{{ $isAdmin ? 'Transaksi trip' : 'Pengeluaran & saldo saya' }}</h2>
+        <div>
+            <h2 class="text-xl font-semibold">{{ $isAdmin ? 'Transaksi trip' : 'Pengeluaran & saldo saya' }}</h2>
+            <p class="mt-1 text-sm text-slate-400">Pilih status untuk melihat transaksi yang perlu ditindaklanjuti atau sudah selesai.</p>
+        </div>
         @if (! $trip->finances_locked_at && ($isAdmin || $trip->status === \App\TripStatus::Ongoing))
             <details class="rounded-2xl border border-white/10 bg-slate-900 p-5 print:hidden" @if (! $isAdmin) open @endif>
                 <summary class="cursor-pointer font-semibold text-emerald-300">+ {{ $isAdmin ? 'Catat transaksi' : 'Ajukan pengeluaran' }}</summary>
@@ -105,6 +113,16 @@
                 Pengajuan pengeluaran belum tersedia. Fitur ini terbuka setelah DP customer tercatat, tugas Anda disetujui, dan status trip menjadi ongoing.
             </div>
         @endif
+        <nav class="flex flex-wrap gap-2" aria-label="Filter status transaksi">
+            @foreach ([null => ['Semua', 'border-white/20 text-slate-200'], 'pending' => ['Menunggu', 'border-amber-400/40 text-amber-200'], 'approved' => ['Disetujui', 'border-emerald-400/40 text-emerald-200'], 'rejected' => ['Ditolak', 'border-rose-400/40 text-rose-200'], 'void' => ['Dibatalkan', 'border-slate-400/40 text-slate-300']] as $status => [$label, $colors])
+                @php($filterStatus = $status === '' ? null : $status)
+                <a href="{{ route($isAdmin ? 'super-admin.trips.finance.show' : 'tour-leader.trips.finance', ['trip' => $trip, ...($filterStatus ? ['entry_status' => $filterStatus] : [])]) }}#transactions"
+                   aria-current="{{ $entryStatus === $filterStatus ? 'page' : 'false' }}"
+                   class="inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition hover:bg-white/10 {{ $colors }} {{ $entryStatus === $filterStatus ? 'bg-white/10 ring-1 ring-white/30' : '' }}">
+                    {{ $label }} <span class="rounded-full bg-white/10 px-2 py-0.5 tabular-nums">{{ $filterStatus ? (int) ($entryStatusCounts[$filterStatus] ?? 0) : $entryStatusCounts->sum() }}</span>
+                </a>
+            @endforeach
+        </nav>
         @include('finance.entries')
     </section>
 

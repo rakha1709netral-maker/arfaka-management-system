@@ -9,7 +9,8 @@
             <p class="mt-2 max-w-2xl text-sm text-slate-400">Pantau pembayaran, biaya operasional, dan hasil setiap perjalanan dalam satu tempat.</p>
         </div>
         <div class="flex flex-wrap gap-2 print:hidden">
-            <a href="{{ route('super-admin.finance.export', request()->only(['search', 'from', 'to', 'status'])) }}" class="rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300">Ekspor CSV</a>
+            <a href="{{ route('super-admin.finance.excel', request()->only(['search', 'from', 'to', 'status'])) }}" class="rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-300">Ekspor Excel</a>
+            <a href="{{ route('super-admin.finance.export', request()->only(['search', 'from', 'to', 'status'])) }}" class="rounded-xl border border-white/20 px-4 py-3 text-sm">CSV data mentah</a>
             <a href="{{ route('super-admin.finance.index', [...request()->only(['search', 'from', 'to', 'status']), 'print' => 1]) }}" class="rounded-xl border border-white/20 px-4 py-3 text-sm">Cetak / Simpan PDF</a>
         </div>
     </div>
@@ -110,6 +111,6 @@
         </div>
     </section>
     {{ $trips->links() }}
-    <p class="text-xs text-slate-500">Seluruh nominal IDR. Cetak mencakup halaman daftar yang sedang dibuka; ekspor CSV mencakup seluruh hasil filter.</p>
+    <p class="text-xs text-slate-500">Seluruh nominal IDR. Cetak, Excel (.xlsx), dan CSV mencakup semua trip sesuai filter. CSV hanya data teks; warna dan tata letak tersedia di ekspor Excel.</p>
 </div>
 @endsection
